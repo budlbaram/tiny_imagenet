@@ -1,12 +1,12 @@
 
 from __future__ import print_function
-import Image
 import os
 import os.path
 import errno
 import numpy as np
 import sys
 import cv, cv2
+from PIL import Image
 
 import torch.utils.data as data
 from torchvision.datasets.utils import download_url, check_integrity
@@ -28,27 +28,32 @@ def find_classes(class_file):
 
     return classes, class_to_idx
 
+def loadPILImage(path):
+    trans_img = Image.open(path).convert('RGB')
+    return trans_img
+    
 def loadCVImage(path):
     img = cv2.imread(path, cv2.CV_LOAD_IMAGE_COLOR)
     trans_img = cv2.cvtColor(img, cv.CV_BGR2RGB)
-    return trans_img.swapaxes(0, 2).swapaxes(1, 2)
+    return Image.fromarray(trans_img.swapaxes(0, 2).swapaxes(1, 2).astype('uint8'), 'RGB')
 
-def make_dataset(is_train, dir, class_to_idx):
+def make_dataset(root, base_folder, dirname, class_to_idx):   
     images = []
+    dir_path = os.path.join(root, base_folder, dirname)
 
-    if is_train:
-        for fname in sorted(os.listdir(dir)):
-            cls_fpath = os.path.join(dir, fname)
+    if dirname == 'train':
+        for fname in sorted(os.listdir(dir_path)):
+            cls_fpath = os.path.join(dir_path, fname)
             if os.path.isdir(cls_fpath):
                 cls_imgs_path = os.path.join(cls_fpath, 'images')
                 for imgname in sorted(os.listdir(cls_imgs_path)):
                     if is_image_file(imgname):
                         path = os.path.join(cls_imgs_path, imgname)
-                        item = (loadCVImage(path), class_to_idx[fname])
+                        item = (path, class_to_idx[fname])
                         images.append(item)
     else:
-        imgs_path = os.path.join(dir, 'images')
-        imgs_annotations = os.path.join(dir, 'val_annotations.txt')
+        imgs_path = os.path.join(dir_path, 'images')
+        imgs_annotations = os.path.join(dir_path, 'val_annotations.txt')
         
         with open(imgs_annotations) as r:
             data_info = map(lambda s : s.split('\t'), r.readlines())
@@ -58,12 +63,12 @@ def make_dataset(is_train, dir, class_to_idx):
         for imgname in sorted(os.listdir(imgs_path)):
             if is_image_file(imgname):
                 path = os.path.join(imgs_path, imgname)
-                item = (loadCVImage(path), class_to_idx[cls_map[imgname]])
+                item = (path, class_to_idx[cls_map[imgname]])
                 images.append(item)
 
     return images
 
-class TinyImagenet200(data.Dataset):
+class TinyImageNet200(data.Dataset):
     """`tiny-imageNet <http://cs231n.stanford.edu/tiny-imagenet-200.zip>`_ Dataset.
     Args:
         root (string): Root directory of dataset where directory
@@ -86,12 +91,13 @@ class TinyImagenet200(data.Dataset):
 
     def __init__(self, root, train=True,
                  transform=None, target_transform=None,
-                 download=False):
+                 download=False, loader = 'opencv'):
         self.root = os.path.expanduser(root)
         self.transform = transform
         self.target_transform = target_transform
         self.train = train  # training set or test set
         self.fpath = os.path.join(root, self.download_fname)
+        self.loader = loader
 
         if download:
             self.download()
@@ -100,17 +106,17 @@ class TinyImagenet200(data.Dataset):
             raise RuntimeError('Dataset not found or corrupted.' +
                                ' You can use download=True to download it')
 
-        classes, class_to_idx = find_classes(os.path.join(self.root, self.base_folder, 'wnids.txt'))
-        
-        dirname = ''
+        _, class_to_idx = find_classes(os.path.join(self.root, self.base_folder, 'wnids.txt'))
+        # self.classes = classes
+
         if self.train:
             dirname = 'train'
         else:
             dirname = 'val'
 
-        self.data = make_dataset(self.train, os.path.join(self.root, self.base_folder, dirname), class_to_idx)
+        self.data_info = make_dataset(self.root, self.base_folder, dirname, class_to_idx)
         
-        if len(self.data) == 0:
+        if len(self.data_info) == 0:
             raise(RuntimeError("Found 0 images in subfolders of: " + root + "\n"
                                "Supported image extensions are: " + ",".join(IMG_EXTENSIONS)))
 
@@ -119,25 +125,26 @@ class TinyImagenet200(data.Dataset):
         Args:
             index (int): Index
         Returns:
-            tuple: (image, target) where target is index of the target class.
+            tuple: (img_path, target) where target is index of the target class.
         """
-        # if self.train:
-        #     img, target = self.train_data[index], self.train_labels[index]
-        # else:
-        #     img, target = self.test_data[index], self.test_labels[index]
 
-        img, target = self.data[index][0], self.data[index][1]
+        img_path, target = self.data_info[index][0], self.data_info[index][1]
+
+        if self.loader == 'pil':
+            img = loadPILImage(img_path)
+        else:
+            img = loadCVImage(img_path)
 
         if self.transform is not None:
-            img = self.transform(img)
+            result_img = self.transform(img)
 
         if self.target_transform is not None:
             target = self.target_transform(target)
 
-        return img, target
+        return result_img, target
 
     def __len__(self):
-        return len(self.data)
+        return len(self.data_info)
 
     def download(self):
         import zipfile

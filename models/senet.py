@@ -79,7 +79,7 @@ class PreActBlock(nn.Module):
 
 
 class SENet(nn.Module):
-    def __init__(self, block, num_blocks, num_classes=10):
+    def __init__(self, block, num_blocks, num_classes=200):
         super(SENet, self).__init__()
         self.in_planes = 64
 
