@@ -131,10 +131,7 @@ class TinyImagenet200(data.Dataset):
         return img, target
 
     def __len__(self):
-        if self.train:
-            return len(self.data)
-        else:
-            return len(self.data)
+        return len(self.data)
 
     def download(self):
         import zipfile
@@ -143,7 +140,6 @@ class TinyImagenet200(data.Dataset):
             print('Files already downloaded and verified')
             return
 
-        root = self.root
         download_url(self.url, self.root, self.base_folder, self.md5)
 
         # extract file
