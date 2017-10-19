@@ -128,6 +128,12 @@ class TinyImagenet200(data.Dataset):
 
         img, target = self.data[index][0], self.data[index][1]
 
+        if self.transform is not None:
+            img = self.transform(img)
+
+        if self.target_transform is not None:
+            target = self.target_transform(target)
+
         return img, target
 
     def __len__(self):
